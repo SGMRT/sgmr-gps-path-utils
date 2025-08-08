@@ -51,20 +51,20 @@ class OsrmMapData(TypedDict):
     tracepoints: List[Tracepoint]
 
 # Non-OSRM data
-before: List[OriginalMapData] = load_jsonl('./dummy/data2.jsonl')
+before: List[OriginalMapData] = load_jsonl('dummy/data1.jsonl')
 beforeDf = pd.DataFrame({
     "lon": [item["lng"] for item in before],
     "lat": [item["lat"] for item in before],
 })
 
-after: List[OriginalMapData] = load_jsonl('smoothed_data.jsonl')
+after: List[OriginalMapData] = load_jsonl('result/smoothed_data.jsonl')
 afterDf = pd.DataFrame({
     "lon": [item["lng"] for item in after],
     "lat": [item["lat"] for item in after],
 })
 
 # OSRM data
-data: OsrmMapData = load_json('osrm_result.json')
+data: OsrmMapData = load_json('result/osrm_result.json')
 valid_tracepoints = [
     tp for tp in data['tracepoints']
     if tp is not None and 'location' in tp and isinstance(tp['location'], list) and len(tp['location']) == 2
@@ -75,48 +75,51 @@ osrmDf = pd.DataFrame({
 })
 
 # Single Scatter View
-# fig = px.scatter_map(
-#     osrmDf,
-#     lat="lat",
-#     lon="lon",
-#     zoom=15,
-#     height=1200,
-#     map_style="open-street-map",
-#     title="Tracepoints Map (Detailed Scatter)",
-#     labels={"lat": "Latitude", "lon": "Longitude"},
-#     hover_data=afterDf.columns,
-#     color_discrete_sequence=["blue"],
-#     size_max=8
-# )
-
-# Multi Scatter View
-fig = px.scatter_map(
-    pd.concat([beforeDf.assign(type="Before"), afterDf.assign(type="After")]),
+scatter_fig = px.scatter_map(
+    afterDf,
     lat="lat",
     lon="lon",
     zoom=15,
     height=1200,
     map_style="open-street-map",
-    title="Tracepoints Map (Before vs After)",
-    labels={"lat": "Latitude", "lon": "Longitude", "type": "Data Type"},
-    hover_data=["lat", "lon", "type"],
-    color="type",
-    color_discrete_map={"Before": "red", "After": "blue"},
+    title="Tracepoints Map (Detailed Scatter)",
+    labels={"lat": "Latitude", "lon": "Longitude"},
+    hover_data=afterDf.columns,
+    color_discrete_sequence=["blue"],
     size_max=8
 )
 
-# Single Line View
-# fig = px.line_map(
-#     osrmDf,
+# Multi Scatter View
+# fig = px.scatter_map(
+#     pd.concat([beforeDf.assign(type="Before"), afterDf.assign(type="After")]),
 #     lat="lat",
 #     lon="lon",
 #     zoom=15,
 #     height=1200,
 #     map_style="open-street-map",
-#     title="Tracepoints Map (Detailed Line)",
-#     labels={"lat": "Latitude", "lon": "Longitude"},
-#     hover_data=afterDf.columns
+#     title="Tracepoints Map (Before vs After)",
+#     labels={"lat": "Latitude", "lon": "Longitude", "type": "Data Type"},
+#     hover_data=["lat", "lon", "type"],
+#     color="type",
+#     color_discrete_map={"Before": "red", "After": "blue"},
+#     size_max=8
 # )
 
-fig.update_layout(mapbox_style="open-street-map")
-fig.write_html("result/tracepoints_map.html")
+# Single Line View
+line_fig = px.line_map(
+    afterDf,
+    lat="lat",
+    lon="lon",
+    zoom=15,
+    height=1200,
+    map_style="open-street-map",
+    title="Tracepoints Map (Detailed Line)",
+    labels={"lat": "Latitude", "lon": "Longitude"},
+    hover_data=afterDf.columns
+)
+
+scatter_fig.update_layout(mapbox_style="open-street-map")
+scatter_fig.write_html("result/scatter_view.html")
+
+line_fig.update_layout(mapbox_style="open-street-map")
+line_fig.write_html("result/line_view.html")

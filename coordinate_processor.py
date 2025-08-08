@@ -6,6 +6,19 @@ from typing import List, Dict, Any
 from pykalman import KalmanFilter
 import numpy as np
 
+# 3초 평균값으로 줄이기
+def smooth_gps_with_average(records: list) -> List[Dict[str, Any]]:
+    
+    smoothed_records = []
+    for i in range(2, len(records), 3):
+        avg_lat = (records[i - 2]['lat'] + records[i - 1]['lat'] + records[i]['lat']) / 3
+        avg_lng = (records[i - 2]['lng'] + records[i - 1]['lng'] + records[i]['lng']) / 3
+        smoothed_records.append({
+            'lat': avg_lat,
+            'lng': avg_lng
+        })
+    return smoothed_records
+
 # Kalman Filter 알고리즘
 def smooth_gps_with_kalman(records: list) -> tuple:
     measurements = np.array([[r['lat'], r['lng']] for r in records])
@@ -66,14 +79,17 @@ def save_data_to_jsonl(data: List[Dict[str, Any]], file_path: str):
 # Main
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    input_file = os.path.join(script_dir, "dummy/data2.jsonl")
+    input_file = os.path.join(script_dir, "dummy/data1.jsonl")
     output_file = os.path.join(script_dir, "result/smoothed_data.jsonl")
 
     # 러닝 데이터 업로드
     running_data = load_jsonl_data(input_file)
     
     # Kalman Filter를 활용하여 보간
-    smoothed_data, original_measurements, smoothed_measurements = smooth_gps_with_kalman(running_data)
+    # smoothed_data, original_measurements, smoothed_measurements = smooth_gps_with_kalman(running_data)
+    
+    # 5초 평균값으로 보간
+    smoothed_data = smooth_gps_with_average(running_data)
     
     # 보간한 데이터 저장
     save_data_to_jsonl(smoothed_data, output_file)
