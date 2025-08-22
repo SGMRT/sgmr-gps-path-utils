@@ -25,12 +25,11 @@ def request_osrm_match(input_path: str,
                 print(f"[Warning] line {line_num} JSON error: {e}", file=sys.stderr)
                 continue
 
-            if 'lng' not in obj or 'lat' not in obj or 'timeStamp' not in obj:
+            if 'lng' not in obj or 'lat' not in obj:
                 print(f"[Warning] line {line_num} missing required fields.", file=sys.stderr)
                 continue
 
             coords.append(f"{obj['lng']},{obj['lat']}")
-            timestamps.append(str(obj['timeStamp']))
 
     # URL 구성
     coord_str = ";".join(coords)

@@ -166,7 +166,7 @@ if __name__ == '__main__':
     
     # 파일 경로 설정
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    input_file = os.path.join(script_dir, "dummy/data7.jsonl")
+    input_file = os.path.join(script_dir, "result/smoothed_data.jsonl")
     output_file = os.path.join(script_dir, "result/smoothed_data.jsonl")
 
     # 러닝 데이터 로드
@@ -176,9 +176,9 @@ if __name__ == '__main__':
     # RDP 적용
     point_processor = RDPPointProcessor()
     
-    epsilon_in_meters = 8.0         # 허용 오차 (미터 단위)
+    # 코스 렌더링용 해상도 축소
+    epsilon_in_meters = 1.0
     points = [Point(record['lat'], record['lng']) for record in running_data]
-    
     print(f"처리할 데이터 점 개수: {len(running_data)}")
     start_time = time.time()
     simplified_track = point_processor.process_gps_track(points, epsilon_in_meters)

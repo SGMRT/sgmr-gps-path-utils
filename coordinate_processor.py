@@ -1,10 +1,10 @@
-import os
-import matplotlib.pyplot as plt
-import json
-import sys
+import os, json, sys
+import numpy as np
+
 from typing import List, Dict, Any
 from pykalman import KalmanFilter
-import numpy as np
+from pyproj import Transformer
+transformer = Transformer.from_crs('EPSG:4326', 'EPSG:5179')
 
 # 3초 평균값으로 줄이기
 def smooth_gps_with_average(records: list) -> List[Dict[str, Any]]:
@@ -19,6 +19,33 @@ def smooth_gps_with_average(records: list) -> List[Dict[str, Any]]:
         })
     return smoothed_records
 
+# 3m 간격으로 줄이기
+def haversine_distance(lat1, lon1, lat2, lon2):
+    R = 6371000
+    phi1 = np.radians(lat1)
+    phi2 = np.radians(lat2)
+    delta_phi = np.radians(lat2 - lat1)
+    delta_lambda = np.radians(lon2 - lon1)
+    
+    a = np.sin(delta_phi/2)**2 + np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda/2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
+    return R * c
+
+def filter_by_distance(points, target_distance=3):
+    filtered = [points[0]]
+    last_point = points[0]
+    
+    for point in points[1:]:
+        distance = haversine_distance(
+            last_point['lat'], last_point['lng'],
+            point['lat'], point['lng']
+        )
+        if distance >= target_distance:
+            filtered.append(point)
+            last_point = point
+    
+    return filtered
+
 # Kalman Filter 알고리즘
 def smooth_gps_with_kalman(records: list) -> tuple:
     measurements = np.array([[r['lat'], r['lng']] for r in records])
@@ -30,7 +57,7 @@ def smooth_gps_with_kalman(records: list) -> tuple:
         transition_matrices=transition_matrix,
         observation_matrices=observation_matrix,
         initial_state_mean=initial_state_mean,
-        observation_covariance=np.eye(2) * 1e-4,          # GPS 측정 오차
+        observation_covariance=np.eye(2) * 1e-5,          # GPS 측정 오차
         transition_covariance=np.eye(4) * 1e-8            # 상태 전이(예측) 오차
     )
     
@@ -43,6 +70,55 @@ def smooth_gps_with_kalman(records: list) -> tuple:
         smoothed_records.append(new_record)
     
     return smoothed_records, measurements, smoothed_states_means
+
+# 비스발링감-와이엇 알고리즘
+def simplify_with_visvalingam(points: List[Dict[str, Any]], threshold_area: int) -> List[Dict[str, Any]]:
+    if len(points) < 3 or not transformer:
+        return points
+
+    # 시작하기 전에 모든 포인트를 UTM 좌표로 '한 번만' 변환합니다.
+    utm_points = []
+    for i, p in enumerate(points):
+        x, y = transformer.transform(p['lat'], p['lng'])
+        utm_points.append({'x': x, 'y': y, 'original_index': i})
+
+    simplified_utm_points = list(utm_points)
+
+    while len(simplified_utm_points) > 2:
+        min_area = float('inf')
+        min_index = -1
+
+        for i in range(1, len(simplified_utm_points) - 1):
+            area = calculate_utm_area(
+                simplified_utm_points[i - 1],
+                simplified_utm_points[i],
+                simplified_utm_points[i + 1]
+            )
+            if area < min_area:
+                min_area = area
+                min_index = i
+
+        # print(f"최소 면적: {min_area}, 임계값: {threshold_area}") # 디버깅용
+        if min_area >= threshold_area:
+            break
+        
+        if min_index != -1:
+            simplified_utm_points.pop(min_index)
+        else:
+            break
+    
+    # 4. 단순화가 끝난 후, 저장해둔 'original_index'를 사용하여 원본 포인트 리스트에서 최종 결과물을 생성합니다.
+    final_points = [points[p['original_index']] for p in simplified_utm_points]
+    
+    return final_points
+
+# 삼각형 면적 계산
+def calculate_utm_area(p1: Dict, p2: Dict, p3: Dict) -> float:
+    return 0.5 * abs(
+        p1['x'] * (p2['y'] - p3['y']) +
+        p2['x'] * (p3['y'] - p1['y']) +
+        p3['x'] * (p1['y'] - p2['y'])
+    )
 
 # 원본 러닝 데이터 업로드
 def load_jsonl_data(file_path: str) -> List[Dict[str, Any]]:
@@ -79,17 +155,27 @@ def save_data_to_jsonl(data: List[Dict[str, Any]], file_path: str):
 # Main
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    input_file = os.path.join(script_dir, "dummy/data1.jsonl")
+    input_file = os.path.join(script_dir, "dummy/data7.jsonl")
     output_file = os.path.join(script_dir, "result/smoothed_data.jsonl")
 
     # 러닝 데이터 업로드
     running_data = load_jsonl_data(input_file)
     
     # Kalman Filter를 활용하여 보간
-    # smoothed_data, original_measurements, smoothed_measurements = smooth_gps_with_kalman(running_data)
+    smoothed_data, original_measurements, smoothed_measurements = smooth_gps_with_kalman(running_data)
     
-    # 5초 평균값으로 보간
-    smoothed_data = smooth_gps_with_average(running_data)
+    # 평균 보간법
+    print("원본 : " + str(len(smoothed_data)))
+    smoothed_data = smooth_gps_with_average(smoothed_data)
+    print("3초 간격 축소 : " + str(len(smoothed_data)))
+    smoothed_data = filter_by_distance(smoothed_data)
+    print("3m 간격 축소 : " + str(len(smoothed_data)))
+    
+    # 비스발링감-와이엇 알고리즘
+    threshold_area = 10.0
+    print("원본 : " + str(len(smoothed_data)))
+    smoothed_data = simplify_with_visvalingam(smoothed_data, threshold_area)
+    print("비스발링감-와이엇 알고리즘 적용 후 : " + str(len(smoothed_data)))
     
     # 보간한 데이터 저장
     save_data_to_jsonl(smoothed_data, output_file)
