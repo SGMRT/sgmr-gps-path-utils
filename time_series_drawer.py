@@ -51,7 +51,7 @@ class OsrmMapData(TypedDict):
     tracepoints: List[Tracepoint]
 
 # Non-OSRM data
-before: List[OriginalMapData] = load_jsonl('dummy/data7.jsonl')
+before: List[OriginalMapData] = load_jsonl('result/kalman_filtered_data.jsonl')
 beforeDf = pd.DataFrame({
     "lon": [item["lng"] for item in before],
     "lat": [item["lat"] for item in before],
